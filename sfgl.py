@@ -91,12 +91,12 @@ class FurryController:
 
     class Camera(Button):
         def __init__(self, x=0, y=0, alpha=100, scale=1):
-            sensor.reset()
+            sensor.reset(dual_buff=True)
             sensor.set_pixformat(sensor.RGB565) # 设置摄像头输出格式为 RGB565（也可以是GRAYSCALE）
             sensor.set_framesize(sensor.QVGA)   # 设置摄像头输出大小为 QVGA (320x240)
-            sensor.skip_frames(time = 10)     # 跳过2000帧
+            sensor.skip_frames(time = 2000)     # 跳过2000帧
             self.image = sensor.snapshot()
-            sensor.set_jb_quality(10)
+            sensor.set_jb_quality(1)
             self.position = {'x': x, 'y': y}
             self.alpha = alpha
             self.scale = scale
@@ -128,6 +128,7 @@ class FurryRenderer:
         self.animate = []
         self.bindmap = np.zeros((height, width), dtype=np.uint8)
         self.press = False
+        self.changemap = True
 
     def addcontroller(self, controller: FurryController.Pic, name, zindex=0):
         self.uid += 1
@@ -179,9 +180,10 @@ class FurryRenderer:
 
     def render(self, **kwargs):
         # Get Touch Status
+        t = time.ticks_us()
         (status,x,y) = ts.read()
         if self.press == False:
-            if status != ts.STATUS_RELEASE and (x!=0 or y!=0):
+            if status != ts.STATUS_RELEASE and (x!=0 or y!=0) and y<self.height:
                 uid = self.bindmap[y][x] - 1
                 if uid != -1 and self.control[uid]["controller"].active:
                     name = self.control[uid]["name"]
@@ -193,7 +195,7 @@ class FurryRenderer:
                         self.control[uid]["controller"].onclick(**kwa)
                     self.press = True
         else:
-             if status == ts.STATUS_RELEASE and (x!=0 or y!=0):
+             if status == ts.STATUS_RELEASE and (x!=0 or y!=0)and y<self.height:
                 uid = self.bindmap[y][x] - 1
                 if uid != -1 and self.control[uid]["controller"].active:
                     name = self.control[uid]["name"]
@@ -203,8 +205,10 @@ class FurryRenderer:
                     else:
                         self.control[uid]["controller"].release(**kwa)
                     self.press = False
+        t = time.ticks_diff(time.ticks_us(), t)
+        print("Get Touch Status USE " + str(t/1000) + " ms")
         # Set Status
-        self.bindmap[:, :] = 0
+        t = time.ticks_us()
         for i in self.animate:
             t = time.ticks_ms()
             proc = (t - i["from"]) / i["time"]
@@ -218,24 +222,34 @@ class FurryRenderer:
             i["controller"].setscale(((s_t * proc) + 1) * i["f_s"])
             f_a = (i["a"] - i["f_a"]) * proc + i["f_a"]
             i["controller"].setalpha(int(f_a))
-
+        t = time.ticks_diff(time.ticks_us(), t)
+        print("Animation USE " + str(t/1000) + " ms")
         # Render
+        t = time.ticks_us()
         self.image.clear()
         tmp = self.control
         tmpp = sorted(tmp, key=lambda tmp: tmp["zindex"])
         step = 0
+        if self.changemap:
+            self.bindmap[:, :] = 0
         for i in tmpp:
             x = i["controller"].x()
             y = i["controller"].y()
-            scale = i["controller"].getscale()
+            scale = i["controller"].scale
             alpha = int(i["controller"].alpha / 100 * 256)
             if alpha != 0:
                 self.image.draw_image(i["controller"].getimage(), x, y, x_scale=scale, y_scale=scale, alpha=alpha)
-            if i["controller"].click:
-                w_s = max(0, x)
-                h_s = max(0, y)
+            if i["controller"].click and self.changemap:
+                w_s = max(0, x) # width start
+                h_s = max(0, y) # height start
                 h_e = min(239, int(h_s + scale * i["controller"].height()))
                 w_e = min(319, int(w_s + scale * i["controller"].width()))
-                self.bindmap[h_s:h_e, w_s:w_e] = step + 1
+                self.bindmap[h_s:h_e, w_s:w_e] = i["uid"] + 1 # decide which area is for which controller
             step += 1
+        t = time.ticks_diff(time.ticks_us(), t)
+        print("Render USE " + str(t/1000) + " ms")
+        self.changemap = not self.changemap
+        t = time.ticks_us()
         lcd.display(self.image)
+        t = time.ticks_diff(time.ticks_us(), t)
+        print("LCD USE " + str(t/1000) + " ms")
