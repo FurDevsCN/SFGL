@@ -11,7 +11,28 @@ THREAD_data = []
 THREAD_ready = True
 lock = _thread.allocate_lock()
 class FurryController:
-    class Pic:
+    class Basic:
+        optimistic_render = False
+        before_render = None
+        after_render = None
+
+        def _before_render(self, name, **kwargs):
+            if self.before_render is not None:
+                if kwargs is not None:
+                    self.before_render(name, **kwargs)
+                else:
+                    self.before_render(name, {})
+
+        def _after_render(self, name, **kwargs):
+            if self.after_render is not None:
+                if kwargs is not None:
+                    self.after_render(name, **kwargs)
+                else:
+                    self.after_render(name, {})
+
+
+
+    class Pic(Basic):
         def __init__(self, image, x=0, y=0, alpha=100):
             position = {'x': x, 'y': y}
             self.image = image
@@ -121,6 +142,7 @@ class FurryController:
 
             return cls.instance
 
+
 def _calculate():
     global THREAD_data
     global THREAD_bindmap
@@ -216,7 +238,7 @@ class FurryRenderer:
         t = time.ticks_us()
         (status,x,y) = ts.read()
         if self.press == False:
-            if status != ts.STATUS_RELEASE and (x!=0 or y!=0) and y<self.height:
+            if status != ts.STATUS_RELEASE and (x!=0 or y!=0) and y<self.height: # Button Unpress
                 uid = self.bindmap[y][x] - 1
                 if uid != -1 and self.control[uid]["controller"].active:
                     name = self.control[uid]["name"]
@@ -228,7 +250,7 @@ class FurryRenderer:
                         self.control[uid]["controller"].onclick(**kwa)
                     self.press = True
         else:
-             if status == ts.STATUS_RELEASE and (x!=0 or y!=0)and y<self.height:
+             if status == ts.STATUS_RELEASE and (x!=0 or y!=0)and y<self.height: # Button Press
                 uid = self.bindmap[y][x] - 1
                 if uid != -1 and self.control[uid]["controller"].active:
                     name = self.control[uid]["name"]
@@ -265,6 +287,7 @@ class FurryRenderer:
         step = 0
         data = []
         for i in tmpp:
+            i["controller"]._before_render(i["name"])
             x = i["controller"].x()
             y = i["controller"].y()
             scale = i["controller"].scale
@@ -278,6 +301,7 @@ class FurryRenderer:
                 h_e = min(239, int(h_s + scale * i["controller"].height()))
                 w_e = min(319, int(w_s + scale * i["controller"].width()))
                 data.append([h_s,h_e,w_s,w_e,i["uid"]+1])
+            i["controller"]._after_render(i["name"])
         if THREAD_ready:
             lock.acquire()
             THREAD_data = data
@@ -285,9 +309,8 @@ class FurryRenderer:
             lock.release()
         if not THREAD_bindmap_processing:
             try:
-                print(22)
                 _thread.start_new_thread(_calculate, () )
-                time.sleep(2)
+                time.sleep(1)
             except:
                 print("Error Retry")
             finally:
