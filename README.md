@@ -61,9 +61,11 @@ Simple Furry Graphics Library (For K210 - Micropython)
   - 
 - FurryController
   - 
-  -  Pic  
+  - Pic  
   - Button
   - Camera
-    
-    
+  - Basic
+
+# Function
+SET TOUCHSCREEN -> SET ANIMATION -> before_render() -> RENDER -> after_render() -> GET TOUCHSTATUS -> SHOW ON LCD
 
