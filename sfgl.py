@@ -4,7 +4,12 @@ import touchscreen as ts
 import os
 import ulab as np
 import gc
-
+import _thread
+THREAD_bindmap_processing = False
+THREAD_bindmap =  []
+THREAD_data = []
+THREAD_ready = True
+lock = _thread.allocate_lock()
 class FurryController:
     class Pic:
         def __init__(self, image, x=0, y=0, alpha=100):
@@ -116,10 +121,33 @@ class FurryController:
 
             return cls.instance
 
+def _calculate():
+    global THREAD_data
+    global THREAD_bindmap
+    global THREAD_ready
+    print("start")
+    while True:
+        try:
+            lock.acquire()
+            THREAD_ready = False
+            tmp = np.zeros((240, 320), dtype=np.uint8)
+            data = THREAD_data
+            lock.release()
+            for i in data:
+                tmp[i[0]:i[1],i[2]:i[3]] = i[4]
+            lock.acquire()
+            THREAD_bindmap = tmp
+            THREAD_ready = True
+            lock.release()
+            time.sleep(0.1)
+        except Exception as e:
+            THREAD_bindmap_processing = False
+            _thread.exit()
 
 class FurryRenderer:
 
     def __init__(self, image, width=320, height=240):
+        global THREAD_bindmap
         self.uid = -1
         self.width = width
         self.height = height
@@ -127,6 +155,7 @@ class FurryRenderer:
         self.control = []
         self.animate = []
         self.bindmap = np.zeros((height, width), dtype=np.uint8)
+        THREAD_bindmap = self.bindmap
         self.press = False
         self.changemap = True
 
@@ -179,6 +208,10 @@ class FurryRenderer:
         self.animate = tmp
 
     def render(self, **kwargs):
+        global THREAD_bindmap_processing
+        global THREAD_bindmap,THREAD_data
+        global _thread
+        self.bindmap = THREAD_bindmap
         # Get Touch Status
         t = time.ticks_us()
         (status,x,y) = ts.read()
@@ -230,22 +263,36 @@ class FurryRenderer:
         tmp = self.control
         tmpp = sorted(tmp, key=lambda tmp: tmp["zindex"])
         step = 0
-        if self.changemap:
-            self.bindmap[:, :] = 0
+        data = []
         for i in tmpp:
             x = i["controller"].x()
             y = i["controller"].y()
             scale = i["controller"].scale
             alpha = int(i["controller"].alpha / 100 * 256)
-            if alpha != 0:
+            if alpha != 0     :
                 self.image.draw_image(i["controller"].getimage(), x, y, x_scale=scale, y_scale=scale, alpha=alpha)
-            if i["controller"].click and self.changemap:
+            if i["controller"].click:
+                scale = i["controller"].scale
                 w_s = max(0, x) # width start
                 h_s = max(0, y) # height start
                 h_e = min(239, int(h_s + scale * i["controller"].height()))
                 w_e = min(319, int(w_s + scale * i["controller"].width()))
-                self.bindmap[h_s:h_e, w_s:w_e] = i["uid"] + 1 # decide which area is for which controller
-            step += 1
+                data.append([h_s,h_e,w_s,w_e,i["uid"]+1])
+        if THREAD_ready:
+            lock.acquire()
+            THREAD_data = data
+            self.bindmap = THREAD_bindmap
+            lock.release()
+        if not THREAD_bindmap_processing:
+            try:
+                print(22)
+                _thread.start_new_thread(_calculate, () )
+                time.sleep(2)
+            except:
+                print("Error Retry")
+            finally:
+                THREAD_bindmap_processing = True
+
         t = time.ticks_diff(time.ticks_us(), t)
         print("Render USE " + str(t/1000) + " ms")
         self.changemap = not self.changemap
