@@ -2,24 +2,59 @@
 Simple Furry Graphics Library (For K210 - Micropython)
 
 # Example
-    from sfgl import * #import SFGL library
-    import image
-    
-    # basic
-    background = image.Image("/sd/img/welcome/home.jpg")
-    renderer = FurryRenderer(background) #Set Renderer
+    import sensor, image, time, lcd
+    import touchscreen as ts
+    import ulab as np
+    import gc
+    from sfgl import *
 
-    Logo = image.Image("/sd/img/welcome/LOGO.jpg")
-    Logo = FurryController.Button(Logo, x=0,y=0, alpha=100) #Use Button
-    Logo.setbind(enter) # set Bind Function
-    renderer.addcontroller(Logo, name="Furry", zindex=0)
-    
-    # animation
-    renderer.setanimate("Furry",2,alpha=100,x=15,y=103,scale=1.2)
 
-    #loop
-    while True:
-        renderer.render()
+    def enter(status, **kwargs):
+        global renderer
+        if status == 0:
+            renderer.setanimate("Furry",1, alpha=0)
+            cam = FurryController.Camera(scale=0.25)
+            renderer.destorycontroller("Furry")
+            renderer.addcontroller(cam, "Camera", 0)
+            renderer.setanimate("Camera",5, scale=1)
+        else:
+            print("Press")
+
+    def test(name, **k):
+        print(name)
+
+    def welcome_main():
+        global renderer
+        lcd.init()
+        ts.init()
+        background = image.Image()
+        Logo = image.Image().draw_string(100, 80, "SFGL \nCLICK TO CONTINUE", color=(200,0,0), scale=2)
+        renderer = FurryRenderer(background)
+        Logo = FurryController.Button(Logo, x=0,y=0, alpha=100)
+        Logo._before_render = test
+        Logo.setbind(enter)
+        renderer.addcontroller(Logo, "Furry", 0)
+        #renderer.setanimate("Furry",2,alpha=100)
+        clock = time.clock()
+        print(lcd.freq(20000000))
+        for i in range(1000):
+            clock.tick()
+            renderer.render()
+            time.sleep_ms(1)
+            print(clock.fps())
+
+    def main():
+        # Set GC
+        gc.enable()
+        GCSIZE = 2 * 1024 * 1024
+        if maix.utils.gc_heap_size() != GCSIZE:
+            maix.utils.gc_heap_size(GCSIZE)
+        # Set Cpu/Kpu
+        # Start Up
+        welcome_main()
+
+
+    main()
 
 # Constrcut
 - FurryRenderer 
