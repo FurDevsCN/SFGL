@@ -30,6 +30,9 @@ class FurryController:
                 else:
                     self.after_render(name, {})
 
+        def _render(self, images, cotroller, message):
+            return images
+
 
 
     class Pic(Basic):
@@ -94,6 +97,8 @@ class FurryController:
 
         def onclick(self, **kwargs):
             if self.active:
+                if self.bind is None:
+                    return False
                 if kwargs == {}:
                     return self.bind(1)
                 else:
@@ -142,6 +147,28 @@ class FurryController:
 
             return cls.instance
 
+    class Text(Basic):
+        optimistic_render = True
+        def __init__(self, text, x=0, y=0, scale=1, color=[255,255,255], alpha=100):
+            self.text = text
+            self.position = {'x': x, 'y': y}
+            self.alpha = alpha
+            self.scale = scale
+            self.color = color
+            self.click = False
+
+        def _render(self, images, cotroller, message):
+            if self.alpha == 0:
+                return images
+            images = images.draw_string(self.position['x'], self.position['y'], self.text, color=self.color, scale=self.scale)
+            return images
+
+        def x(self):
+            return self.position['x']
+
+        def y(self):
+            return self.position['y']
+
 
 def _calculate():
     global THREAD_data
@@ -168,18 +195,21 @@ def _calculate():
 
 class FurryRenderer:
 
-    def __init__(self, image, width=320, height=240):
+    def __init__(self, images=None, width=320, height=240):
         global THREAD_bindmap
+        if images is None:
+            images = image.Image()
         self.uid = -1
         self.width = width
         self.height = height
-        self.image = image
+        self.image = images
         self.control = []
         self.animate = []
         self.bindmap = np.zeros((height, width), dtype=np.uint8)
         THREAD_bindmap = self.bindmap
         self.press = False
         self.changemap = True
+        lcd.init()
 
     def addcontroller(self, controller: FurryController.Pic, name, zindex=0):
         self.uid += 1
@@ -292,8 +322,10 @@ class FurryRenderer:
             y = i["controller"].y()
             scale = i["controller"].scale
             alpha = int(i["controller"].alpha / 100 * 256)
-            if alpha != 0     :
+            if alpha != 0  and not i["controller"].optimistic_render:
                 self.image.draw_image(i["controller"].getimage(), x, y, x_scale=scale, y_scale=scale, alpha=alpha)
+            if i["controller"].optimistic_render:
+                self.image = i["controller"]._render(self.image, i["controller"], kwargs)
             if i["controller"].click:
                 scale = i["controller"].scale
                 w_s = max(0, x) # width start

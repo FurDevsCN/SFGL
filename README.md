@@ -64,8 +64,15 @@ Simple Furry Graphics Library (For K210 - Micropython)
   - Pic  
   - Button
   - Camera
+  - Text
   - Basic
 
 # Function
 SET TOUCHSCREEN -> SET ANIMATION -> before_render() -> RENDER -> after_render() -> GET TOUCHSTATUS -> SHOW ON LCD
+
+# Optimistic Controller
+1. Use Basic as Super Class
+2. set "optimistic_render" as True
+3. define _render(self,  images, cotroller, message) in your class
+4. You can see "Text" Controller for example
 
