@@ -1,5 +1,6 @@
 # SFGL
 Simple Furry Graphics Library (For K210 - Micropython)
+Create GUI for K210
 
 # Example
     import sensor, image, time, lcd
